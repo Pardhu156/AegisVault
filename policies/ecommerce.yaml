@@ -1,0 +1,65 @@
+version: "1.0"
+
+application:
+  name: ecommerce-support
+  description: Customer support assistant for an ecommerce platform
+
+purpose: >
+  Help users with products, orders, shipping, returns and refunds.
+
+allowed_topics:
+  - products
+  - orders
+  - shipping
+  - returns
+  - refunds
+  - payment status
+
+blocked_topics:
+  - programming
+  - medical advice
+  - legal advice
+  - investment advice
+
+gates:
+  request:
+    enabled: true
+    allow_threshold: 0.80
+    block_threshold: 0.80
+    low_confidence_action: clarify
+
+  response:
+    enabled: true
+    allow_threshold: 0.80
+    block_threshold: 0.80
+    low_confidence_action: block
+
+evaluator:
+  provider: ollama
+  model: llama3.2
+  base_url: http://localhost:11434
+  timeout_seconds: 30
+  temperature: 0
+
+fallback:
+  evaluator_failure_action: block
+  malformed_output_action: block
+
+checks:
+  max_request_chars: 8000
+  max_response_chars: 12000
+  blocked_phrases: []
+  blocked_keywords: []
+  keyword_case_insensitive: true
+
+audit:
+  enabled: true
+  output_path: logs/aegisvault.jsonl
+  include_request_text: true
+  include_response_text: true
+
+messages:
+  request_blocked: "I can only help with ecommerce support requests about products, orders, shipping, returns, refunds, or payment status."
+  request_clarify: "Please restate your request as an ecommerce support question."
+  response_blocked: "I cannot provide that response because it falls outside ecommerce support."
+  response_replaced: "I cannot provide that response because it falls outside ecommerce support."
