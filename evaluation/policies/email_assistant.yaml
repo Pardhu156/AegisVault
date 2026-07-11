@@ -1,0 +1,65 @@
+version: "1.0"
+
+application:
+  name: email-assistant
+  description: Assistant for email drafting, rewriting, summarization, urgency classification, and action items
+
+purpose: >
+  Help users summarize, draft, rewrite, classify, and find action items in emails,
+  including search-related email requests.
+
+allowed_topics:
+  - summarize an email
+  - draft an email
+  - rewrite an email
+  - identify action items
+  - classify email urgency
+  - search-related email requests
+
+blocked_topics:
+  - write production code
+  - solve mathematics homework
+  - provide medical treatment advice
+  - give financial investment recommendations
+
+gates:
+  request:
+    enabled: true
+    allow_threshold: 0.80
+    block_threshold: 0.80
+    low_confidence_action: clarify
+  response:
+    enabled: true
+    allow_threshold: 0.80
+    block_threshold: 0.80
+    low_confidence_action: block
+
+evaluator:
+  provider: ollama
+  model: llama3.2
+  base_url: http://localhost:11434
+  timeout_seconds: 30
+  temperature: 0
+
+fallback:
+  evaluator_failure_action: block
+  malformed_output_action: block
+
+checks:
+  max_request_chars: 8000
+  max_response_chars: 12000
+  blocked_phrases: []
+  blocked_keywords: []
+  keyword_case_insensitive: true
+
+audit:
+  enabled: true
+  output_path: logs/evaluation/email_assistant_aegisvault.jsonl
+  include_request_text: true
+  include_response_text: true
+
+messages:
+  request_blocked: "I can only help with email tasks such as drafting, rewriting, summarizing, urgency classification, action items, or email search."
+  request_clarify: "Please restate your request as an email-assistance task."
+  response_blocked: "I cannot provide that response because it falls outside email assistance."
+  response_replaced: "I cannot provide that response because it falls outside email assistance."

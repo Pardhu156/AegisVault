@@ -14,10 +14,15 @@ dependencies = [
   "pydantic>=2.7,<3",
   "PyYAML>=6.0,<7",
   "requests>=2.31,<3",
+  "tqdm>=4.66,<5",
 ]
 
 [project.optional-dependencies]
+evaluation = [
+  "google-genai>=1.0,<2",
+]
 dev = [
+  "google-genai>=1.0,<2",
   "pytest>=8.0,<9",
 ]
 
@@ -28,4 +33,5 @@ where = ["src"]
 testpaths = ["tests"]
 markers = [
   "ollama: integration tests that require a running Ollama instance",
+  "gemini: integration tests that require Gemini and Ollama",
 ]

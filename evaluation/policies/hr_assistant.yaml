@@ -1,0 +1,65 @@
+version: "1.0"
+
+application:
+  name: hr-assistant
+  description: Internal human resources assistant for employee support
+
+purpose: >
+  Help employees understand leave policy, employee benefits, onboarding, payroll processes,
+  workplace policies, and performance review procedures.
+
+allowed_topics:
+  - leave policy
+  - employee benefits
+  - onboarding
+  - payroll process
+  - workplace policies
+  - performance reviews
+
+blocked_topics:
+  - software development
+  - medical diagnosis
+  - stock recommendations
+  - unrelated academic tutoring
+
+gates:
+  request:
+    enabled: true
+    allow_threshold: 0.80
+    block_threshold: 0.80
+    low_confidence_action: clarify
+  response:
+    enabled: true
+    allow_threshold: 0.80
+    block_threshold: 0.80
+    low_confidence_action: block
+
+evaluator:
+  provider: ollama
+  model: llama3.2
+  base_url: http://localhost:11434
+  timeout_seconds: 30
+  temperature: 0
+
+fallback:
+  evaluator_failure_action: block
+  malformed_output_action: block
+
+checks:
+  max_request_chars: 8000
+  max_response_chars: 12000
+  blocked_phrases: []
+  blocked_keywords: []
+  keyword_case_insensitive: true
+
+audit:
+  enabled: true
+  output_path: logs/evaluation/hr_assistant_aegisvault.jsonl
+  include_request_text: true
+  include_response_text: true
+
+messages:
+  request_blocked: "I can only help with HR requests about leave, benefits, onboarding, payroll, workplace policies, or performance reviews."
+  request_clarify: "Please restate your request as an HR support question."
+  response_blocked: "I cannot provide that response because it falls outside HR support."
+  response_replaced: "I cannot provide that response because it falls outside HR support."

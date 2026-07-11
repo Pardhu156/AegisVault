@@ -9,4 +9,6 @@ venv/
 dist/
 build/
 logs/
+evaluation/results/*
+!evaluation/results/.gitkeep
 .DS_Store
