@@ -203,6 +203,23 @@ def overhead_percent(overhead: float | None, baseline_latency_ms: float | None) 
     return (overhead / baseline_latency_ms) * 100
 
 
+def is_quota_or_rate_limit_error(error: Exception | str) -> bool:
+    """Return True for Gemini quota/rate-limit failures that should not be retried aggressively."""
+
+    message = str(error).lower()
+    return any(
+        marker in message
+        for marker in (
+            "429",
+            "quota exceeded",
+            "resource_exhausted",
+            "rate limit",
+            "rate-limit",
+            "too many requests",
+        )
+    )
+
+
 def verdict_matches(expected: Verdict | str | None, actual: Verdict | str | None) -> bool:
     if expected is None or actual is None:
         return False
@@ -461,6 +478,8 @@ class GeminiApplication:
                 return getattr(response, "text", "") or ""
             except Exception as exc:
                 last_exc = exc
+                if is_quota_or_rate_limit_error(exc):
+                    break
                 if attempt >= self.retries:
                     break
                 time.sleep(0.5 * (2**attempt))

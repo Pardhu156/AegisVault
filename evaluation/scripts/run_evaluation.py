@@ -43,6 +43,7 @@ from evaluation.scripts.eval_lib import (
     no_secret_payload,
     overhead_ms,
     overhead_percent,
+    is_quota_or_rate_limit_error,
     progress_totals,
     read_jsonl,
     result_from_guard,
@@ -365,6 +366,7 @@ def _record_failure(
         if fail_fast:
             raise exc
         return
+    skipped = mode == "end-to-end" and is_quota_or_rate_limit_error(exc)
     record = {
         "id": case.id,
         "domain": case.domain,
@@ -372,15 +374,15 @@ def _record_failure(
         "mode": mode,
         "run_index": run_index,
         "matched": False,
-        "mismatched": True,
+        "mismatched": not skipped,
         "pass": False,
-        "skipped": False,
+        "skipped": skipped,
         "error": str(exc),
         "error_type": "gemini" if "Gemini" in str(exc) or "GEMINI" in str(exc) else "ollama" if "Ollama" in str(exc) else "runtime",
     }
     writers["failure"].write(record)
     writers["case"].write(record)
-    counters["mismatched"] += 1
+    counters["skipped" if skipped else "mismatched"] += 1
     if fail_fast:
         raise exc
 

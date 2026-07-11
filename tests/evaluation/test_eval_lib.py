@@ -17,6 +17,7 @@ from evaluation.scripts.eval_lib import (
     completed_keys,
     ensure_output_dir,
     generate_run_id,
+    is_quota_or_rate_limit_error,
     load_domain_assets,
     load_jsonl,
     no_secret_payload,
@@ -27,6 +28,7 @@ from evaluation.scripts.eval_lib import (
     safe_latency_summary,
 )
 from evaluation.scripts.run_evaluation import _record_match
+from evaluation.scripts.run_evaluation import _record_failure
 from conftest import FakeEvaluator, MemoryAuditSink, decision
 
 
@@ -242,3 +244,40 @@ def test_secrets_are_not_written_to_outputs(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert no_secret_payload({"model": "x"})
     assert not no_secret_payload({"leak": "super-secret"})
+
+
+def test_quota_error_detection() -> None:
+    assert is_quota_or_rate_limit_error("429 RESOURCE_EXHAUSTED quota exceeded")
+    assert not is_quota_or_rate_limit_error("plain validation error")
+
+
+def test_end_to_end_quota_failure_is_skipped(tmp_path: Path) -> None:
+    case = RequestCase(
+        id="r1",
+        domain="demo",
+        type="request",
+        category="in_domain",
+        text="hello",
+        expected_request_verdict="ALLOW",
+    )
+    writers = {
+        "failure": JsonlWriter(tmp_path / "failures.jsonl"),
+        "case": JsonlWriter(tmp_path / "case_results.jsonl"),
+    }
+    counters = {"matched": 0, "mismatched": 0, "skipped": 0}
+
+    _record_failure(
+        writers,
+        counters,
+        case,
+        "end-to-end",
+        0,
+        RuntimeError("Gemini request failed: 429 RESOURCE_EXHAUSTED quota exceeded"),
+        False,
+    )
+
+    rows = read_jsonl(tmp_path / "case_results.jsonl")
+    assert counters["skipped"] == 1
+    assert counters["mismatched"] == 0
+    assert rows[0]["skipped"] is True
+    assert rows[0]["mismatched"] is False
