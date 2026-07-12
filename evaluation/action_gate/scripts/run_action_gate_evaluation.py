@@ -121,6 +121,15 @@ def main() -> int:
     pbar = tqdm(total=len(cases) * args.runs, desc="action-gate", ncols=110)
     try:
         for case in cases:
+            for warmup_index in range(args.warmup_runs):
+                run_case(
+                    case=case,
+                    policy=policies[case.domain],
+                    backend=args.backend,
+                    config=config,
+                    no_ollama=args.no_ollama,
+                    run_index=-(warmup_index + 1),
+                )
             for run_index in range(args.runs):
                 key = (case.id, run_index)
                 if key in completed:

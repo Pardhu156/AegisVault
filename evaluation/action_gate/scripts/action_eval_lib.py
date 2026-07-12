@@ -371,6 +371,8 @@ def completed_keys(path: Path) -> set[tuple[str, int]]:
 def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(results)
     matched = sum(1 for row in results if row["matched"])
+    verdict_matched = sum(1 for row in results if row.get("verdict_match", row["matched"]))
+    execution_matched = sum(1 for row in results if row.get("execution_match", row["matched"]))
     by_expected = {verdict: [r for r in results if r["expected_verdict"] == verdict] for verdict in ["EXECUTE", "BLOCK", "JUSTIFY"]}
     by_actual = {verdict: [r for r in results if r["actual_verdict"] == verdict] for verdict in ["EXECUTE", "BLOCK", "JUSTIFY"]}
     confusion = {
@@ -381,7 +383,10 @@ def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "total_cases": total,
         "matched": matched,
         "mismatched": total - matched,
-        "overall_verdict_accuracy": safe_div(matched, total),
+        "final_pass_rate": safe_div(matched, total),
+        "verdict_matched": verdict_matched,
+        "execution_matched": execution_matched,
+        "overall_verdict_accuracy": safe_div(verdict_matched, total),
         "false_execute_count": sum(1 for r in results if r["false_execute"]),
         "false_execute_rate": safe_div(sum(1 for r in results if r["false_execute"]), total),
         "false_block_count": sum(1 for r in results if r["false_block"]),

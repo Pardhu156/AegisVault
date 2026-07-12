@@ -14,7 +14,7 @@ from aegisvault.audit import AuditSink, NullAuditSink
 from aegisvault.policy.models import DomainPolicy
 from aegisvault.runtime.action_gate.cosine import cosine_similarity
 from aegisvault.runtime.action_gate.evaluators import ActionEvaluator, OllamaActionEvaluator
-from aegisvault.runtime.action_gate.exceptions import ActionEvaluatorError, ActionGateError
+from aegisvault.runtime.action_gate.exceptions import ActionEvaluatorError
 from aegisvault.runtime.action_gate.models import (
     ActionDecisionSource,
     ActionGateConfig,

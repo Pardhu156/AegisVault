@@ -89,9 +89,9 @@ def test_goal_vault_checks_in_run_case() -> None:
 
 def test_metrics_false_counts_and_confusion_matrix() -> None:
     rows = [
-        {"expected_verdict": "EXECUTE", "actual_verdict": "EXECUTE", "matched": True, "false_execute": False, "false_block": False, "false_justify": False, "blocked_tool_executed": False, "justify_auto_executed": False, "decision_source": "COSINE", "ollama_called": False, "domain": "d", "category": "c", "backend": "memory", "goal_similarity": 1.0, "goal_vault": {"commit_succeeded": True, "duplicate_rejected": True, "retrieval_succeeded": True, "integrity_verified": True, "ttl_seconds": 1}},
-        {"expected_verdict": "BLOCK", "actual_verdict": "EXECUTE", "matched": False, "false_execute": True, "false_block": False, "false_justify": False, "blocked_tool_executed": True, "justify_auto_executed": False, "decision_source": "COSINE", "ollama_called": False, "domain": "d", "category": "c", "backend": "memory", "goal_similarity": 1.0, "goal_vault": {"commit_succeeded": True, "duplicate_rejected": True, "retrieval_succeeded": True, "integrity_verified": True, "ttl_seconds": 1}},
-        {"expected_verdict": "EXECUTE", "actual_verdict": "BLOCK", "matched": False, "false_execute": False, "false_block": True, "false_justify": False, "blocked_tool_executed": False, "justify_auto_executed": False, "decision_source": "FALLBACK", "ollama_called": False, "domain": "x", "category": "k", "backend": "memory", "goal_similarity": 0.0, "goal_vault": {"commit_succeeded": True, "duplicate_rejected": True, "retrieval_succeeded": True, "integrity_verified": True, "ttl_seconds": 1}},
+        {"expected_verdict": "EXECUTE", "actual_verdict": "EXECUTE", "matched": True, "verdict_match": True, "execution_match": True, "false_execute": False, "false_block": False, "false_justify": False, "blocked_tool_executed": False, "justify_auto_executed": False, "decision_source": "COSINE", "ollama_called": False, "domain": "d", "category": "c", "backend": "memory", "goal_similarity": 1.0, "goal_vault": {"commit_succeeded": True, "duplicate_rejected": True, "retrieval_succeeded": True, "integrity_verified": True, "ttl_seconds": 1}},
+        {"expected_verdict": "BLOCK", "actual_verdict": "EXECUTE", "matched": False, "verdict_match": False, "execution_match": False, "false_execute": True, "false_block": False, "false_justify": False, "blocked_tool_executed": True, "justify_auto_executed": False, "decision_source": "COSINE", "ollama_called": False, "domain": "d", "category": "c", "backend": "memory", "goal_similarity": 1.0, "goal_vault": {"commit_succeeded": True, "duplicate_rejected": True, "retrieval_succeeded": True, "integrity_verified": True, "ttl_seconds": 1}},
+        {"expected_verdict": "EXECUTE", "actual_verdict": "BLOCK", "matched": False, "verdict_match": False, "execution_match": True, "false_execute": False, "false_block": True, "false_justify": False, "blocked_tool_executed": False, "justify_auto_executed": False, "decision_source": "FALLBACK", "ollama_called": False, "domain": "x", "category": "k", "backend": "memory", "goal_similarity": 0.0, "goal_vault": {"commit_succeeded": True, "duplicate_rejected": True, "retrieval_succeeded": True, "integrity_verified": True, "ttl_seconds": 1}},
     ]
     metrics = calculate_metrics(rows)
     assert metrics["false_execute_count"] == 1
@@ -99,6 +99,9 @@ def test_metrics_false_counts_and_confusion_matrix() -> None:
     assert metrics["blocked_tool_execution_count"] == 1
     assert metrics["confusion_matrix"]["BLOCK"]["EXECUTE"] == 1
     assert metrics["per_domain"]["d"]["total"] == 2
+    assert metrics["overall_verdict_accuracy"] == pytest.approx(1 / 3)
+    assert metrics["final_pass_rate"] == pytest.approx(1 / 3)
+    assert metrics["execution_matched"] == 2
 
 
 def test_latency_summary_and_p95() -> None:
@@ -151,6 +154,41 @@ def test_secret_redaction_in_run_metadata() -> None:
     assert "password" in serialized
     assert "[redacted]" in serialized
     assert "API_KEY" not in serialized
+
+
+def test_warmup_cli_runs_are_not_persisted(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    output_dir = tmp_path / "results"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "evaluation/action_gate/scripts/run_action_gate_evaluation.py",
+            "--domains",
+            "email_assistant",
+            "--backend",
+            "memory",
+            "--limit",
+            "1",
+            "--runs",
+            "1",
+            "--warmup-runs",
+            "1",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=Path.cwd(),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert "Total executed: 1" in completed.stdout
+    run_dirs = [path for path in output_dir.iterdir() if path.is_dir()]
+    assert len(run_dirs) == 1
+    rows = read_jsonl(run_dirs[0] / "case_results.jsonl")
+    assert len(rows) == 1
+    assert rows[0]["run_index"] == 0
 
 
 def test_expected_verdict_distribution_balanced() -> None:
