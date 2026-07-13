@@ -1,0 +1,17 @@
+{
+  "contacts": [
+    {"id": "manager", "name": "Maya Rao", "email": "maya.rao@acme.example", "role": "Manager", "aliases": ["maya", "boss"]},
+    {"id": "hr", "name": "Nina Patel", "email": "hr@acme.example", "role": "HR Business Partner", "aliases": ["human resources", "benefits"]},
+    {"id": "finance", "name": "Victor Chen", "email": "finance@acme.example", "role": "Finance Operations", "aliases": ["expenses", "payroll"]},
+    {"id": "ceo", "name": "Elena Brooks", "email": "elena.brooks@acme.example", "role": "CEO", "aliases": ["elena", "chief executive"]},
+    {"id": "alpha_pm", "name": "Jon Kim", "email": "jon.kim@acme.example", "role": "Project Alpha PM", "aliases": ["jon", "alpha"]},
+    {"id": "beta_pm", "name": "Priya Shah", "email": "priya.shah@acme.example", "role": "Project Beta PM", "aliases": ["priya", "beta"]},
+    {"id": "travel", "name": "Acme Travel Desk", "email": "travel@acme.example", "role": "Travel Desk", "aliases": ["travel desk"]},
+    {"id": "support", "name": "CloudDesk Support", "email": "support@clouddesk.example", "role": "Vendor Support", "aliases": ["cloud support"]},
+    {"id": "recruiter", "name": "Asha Mehta", "email": "asha.mehta@talentbridge.example", "role": "Recruiter", "aliases": ["asha", "recruiter"]},
+    {"id": "client", "name": "Jordan Lee", "email": "jordan.lee@northwind.example", "role": "Client", "aliases": ["northwind", "jordan"]},
+    {"id": "teammate", "name": "Sam Rivera", "email": "sam.rivera@acme.example", "role": "Colleague", "aliases": ["sam"]},
+    {"id": "amazon", "name": "Amazon Business", "email": "no-reply@amazonbusiness.example", "role": "Invoice Sender", "aliases": ["amazon"]},
+    {"id": "system", "name": "Acme Systems", "email": "no-reply@systems.acme.example", "role": "System Notifications", "aliases": ["systems"]}
+  ]
+}

@@ -319,6 +319,21 @@ Run Stage 4.0 mock validation:
 python evaluation/agent_runtime/scripts/validate_agent_runtime.py --mock
 ```
 
+Run the Stage 4.1 Email Agent:
+
+```bash
+python run_agent.py --email-agent --task "Summarize unread emails from my manager." --model qwen3:4b-instruct --timeout-seconds 180 --num-predict 160
+```
+
+Run Stage 4.1 Email Agent evaluation:
+
+```bash
+python evaluation/agent_runtime/scripts/run_email_agent_evaluation.py --mock --limit 5
+python evaluation/agent_runtime/scripts/run_email_agent_evaluation.py --model qwen3:4b-instruct --limit 3 --timeout-seconds 180 --num-predict 160
+```
+
+Email Agent documentation is in `docs/email_agent.md`. Synthetic threaded email data lives in `datasets/email/`, and reports are written to `reports/email_agent/<run_id>/`.
+
 Run the optional Ollama integration test only when Ollama is running and the configured model is available:
 
 ```bash

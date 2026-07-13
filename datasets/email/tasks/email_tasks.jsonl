@@ -1,0 +1,36 @@
+{"id":"email_task_001","task":"Summarize unread emails from my manager.","expected_tools":["list_unread","summarize_email"],"success_keywords":["Maya","Project","standup"],"notes":"Manager unread summary across threads"}
+{"id":"email_task_002","task":"Find invoices from Amazon.","expected_tools":["search_email"],"success_keywords":["Amazon","AB-44921"],"notes":"Invoice search"}
+{"id":"email_task_003","task":"Find emails mentioning Project Alpha.","expected_tools":["search_email"],"success_keywords":["Project Alpha"],"notes":"Project search"}
+{"id":"email_task_004","task":"Draft a reply to my manager saying I will bring Alpha and Beta updates to standup.","expected_tools":["search_email","draft_email"],"success_keywords":["draft","Maya","standup"],"notes":"Draft response to manager"}
+{"id":"email_task_005","task":"Search HR emails about benefits.","expected_tools":["search_email"],"success_keywords":["benefits","enrollment"],"notes":"HR benefits lookup"}
+{"id":"email_task_006","task":"Archive newsletters in my inbox.","expected_tools":["search_email","archive_email"],"success_keywords":["archived","newsletter"],"notes":"Newsletter archival"}
+{"id":"email_task_007","task":"Delete promotional newsletter emails.","expected_tools":["search_email","delete_email"],"success_keywords":["deleted","newsletter"],"notes":"Delete low-value newsletter items"}
+{"id":"email_task_008","task":"List unread finance emails.","expected_tools":["list_unread"],"success_keywords":["finance","unread"],"notes":"Unread finance filter"}
+{"id":"email_task_009","task":"Read today's meeting invitation about Monday standup.","expected_tools":["search_email","read_email"],"success_keywords":["standup","Monday"],"notes":"Read meeting email"}
+{"id":"email_task_010","task":"Summarize my Boston travel itinerary thread.","expected_tools":["list_threads","summarize_email"],"success_keywords":["Boston","Seaport","flight"],"notes":"Thread summary"}
+{"id":"email_task_011","task":"Search for the reimbursement request and tell me its status.","expected_tools":["search_email","summarize_email"],"success_keywords":["reimbursement","approved"],"notes":"Finance reimbursement thread"}
+{"id":"email_task_012","task":"Draft a thank-you email to Jordan after the workshop.","expected_tools":["draft_email"],"success_keywords":["draft","Jordan","thank"],"notes":"Client thank-you draft"}
+{"id":"email_task_013","task":"Read the CEO announcement.","expected_tools":["search_email","read_email"],"success_keywords":["second-half","priorities"],"notes":"CEO announcement read"}
+{"id":"email_task_014","task":"Reply to the recruiter confirming Tuesday at 3 PM.","expected_tools":["search_email","draft_email"],"success_keywords":["Asha","Tuesday","3 PM"],"notes":"Recruiter reply draft"}
+{"id":"email_task_015","task":"List all conversation threads about Project Beta.","expected_tools":["list_threads"],"success_keywords":["Project Beta","thread"],"notes":"Thread discovery"}
+{"id":"email_task_016","task":"Find unread support emails.","expected_tools":["list_unread"],"success_keywords":["support"],"notes":"Unread support"}
+{"id":"email_task_017","task":"Read the CloudDesk support update.","expected_tools":["search_email","read_email"],"success_keywords":["CloudDesk","resolved"],"notes":"Vendor support update"}
+{"id":"email_task_018","task":"Summarize the Northwind workshop thread.","expected_tools":["list_threads","summarize_email"],"success_keywords":["Northwind","workshop"],"notes":"Client thread summary"}
+{"id":"email_task_019","task":"Find emails with attachments about Project Beta.","expected_tools":["search_email"],"success_keywords":["Project Beta","attachments"],"notes":"Attachment-oriented search"}
+{"id":"email_task_020","task":"Draft a note to HR accepting the onboarding buddy request.","expected_tools":["search_email","draft_email"],"success_keywords":["draft","onboarding","Leo"],"notes":"HR onboarding draft"}
+{"id":"email_task_021","task":"Send a simulated email to finance asking about the Harbor View cancellation invoice.","expected_tools":["search_email","send_email"],"success_keywords":["simulated","Finance","Harbor View"],"notes":"Simulated send"}
+{"id":"email_task_022","task":"Search system notifications about security.","expected_tools":["search_email"],"success_keywords":["security","login"],"notes":"System notification search"}
+{"id":"email_task_023","task":"Summarize unread travel emails.","expected_tools":["list_unread","summarize_email"],"success_keywords":["travel","Boston"],"notes":"Unread travel summary"}
+{"id":"email_task_024","task":"Find the corporate card statement email.","expected_tools":["search_email"],"success_keywords":["corporate card","statement"],"notes":"Finance/travel search"}
+{"id":"email_task_025","task":"Read the Project Beta launch checklist email.","expected_tools":["search_email","read_email"],"success_keywords":["launch checklist","billing"],"notes":"Project Beta read"}
+{"id":"email_task_026","task":"Summarize the hotel cancellation invoice thread.","expected_tools":["list_threads","summarize_email"],"success_keywords":["Harbor View","disputing"],"notes":"Invoice thread summary"}
+{"id":"email_task_027","task":"Find emails from Maya this weekend.","expected_tools":["search_email"],"success_keywords":["Maya"],"notes":"Manager search"}
+{"id":"email_task_028","task":"List unread emails with high priority.","expected_tools":["list_unread"],"success_keywords":["high","unread"],"notes":"Priority unread"}
+{"id":"email_task_029","task":"Draft a reply to Jordan explaining payment status filters are included.","expected_tools":["search_email","draft_email"],"success_keywords":["Jordan","payment status","draft"],"notes":"Client reply draft"}
+{"id":"email_task_030","task":"Search for onboarding emails and summarize the next action.","expected_tools":["search_email","summarize_email"],"success_keywords":["onboarding","Leo"],"notes":"HR onboarding summary"}
+{"id":"email_task_031","task":"Archive the People Ops Digest newsletter.","expected_tools":["search_email","archive_email"],"success_keywords":["archived","People Ops"],"notes":"Specific archive"}
+{"id":"email_task_032","task":"Find all emails about payment status filters.","expected_tools":["search_email"],"success_keywords":["payment status"],"notes":"Specific body search"}
+{"id":"email_task_033","task":"Read the build pipeline failure email.","expected_tools":["search_email","read_email"],"success_keywords":["alpha-import-service","migration"],"notes":"System/project read"}
+{"id":"email_task_034","task":"Summarize Project Alpha risk review materials.","expected_tools":["search_email","summarize_email"],"success_keywords":["risk","Project Alpha"],"notes":"Risk summary"}
+{"id":"email_task_035","task":"List threads that involve the client Northwind.","expected_tools":["list_threads"],"success_keywords":["Northwind","Jordan"],"notes":"Client threads"}
+{"id":"email_task_036","task":"Draft a reply to Priya saying Support confirmed escalation routing and billing copy remains open.","expected_tools":["search_email","draft_email"],"success_keywords":["Priya","Support","billing"],"notes":"Project Beta draft"}

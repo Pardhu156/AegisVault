@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 ROOT = Path(__file__).resolve().parents[3]
 SRC = ROOT / "src"

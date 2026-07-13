@@ -27,11 +27,13 @@ class OllamaChatClient:
         base_url: str = "http://localhost:11434",
         timeout_seconds: float = 60,
         temperature: float = 0,
+        num_predict: int | None = None,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.temperature = temperature
+        self.num_predict = num_predict
 
     def chat(self, *, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None) -> OllamaChatResult:
         started = time.perf_counter()
@@ -41,6 +43,8 @@ class OllamaChatClient:
             "stream": False,
             "options": {"temperature": self.temperature},
         }
+        if self.num_predict is not None:
+            request["options"]["num_predict"] = self.num_predict
         if tools:
             request["tools"] = tools
         try:

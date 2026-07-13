@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from tqdm.auto import tqdm
+
 ROOT = Path(__file__).resolve().parents[3]
 SRC = ROOT / "src"
 if str(ROOT) not in sys.path:
@@ -66,24 +68,35 @@ def main() -> int:
     rows = [json.loads(line) for line in Path(args.prompts).read_text(encoding="utf-8").splitlines() if line.strip()]
     results = []
     clear_notes()
-    for row in rows:
-        result = runtime.run(row["prompt"])
-        actual_tools = [record.tool_name for record in result.tool_records]
-        expected = row["expected_tools"]
-        match = all(tool in actual_tools for tool in expected)
-        results.append(
-            {
-                "id": row["id"],
-                "prompt": row["prompt"],
-                "expected_tools": expected,
-                "actual_tools": actual_tools,
-                "match": match,
-                "final_response": result.final_response,
-                "latency_ms": result.trace.total_latency_ms,
-                "trace_id": result.trace.trace_id,
-                "errors": [record.error for record in result.tool_records if record.error],
-            }
-        )
+    with tqdm(total=len(rows), desc="agent-runtime validation", dynamic_ncols=True) as progress:
+        for row in rows:
+            progress.set_postfix_str(f"current={row['id']}")
+            result = runtime.run(row["prompt"])
+            actual_tools = [record.tool_name for record in result.tool_records]
+            expected = row["expected_tools"]
+            match = all(tool in actual_tools for tool in expected)
+            results.append(
+                {
+                    "id": row["id"],
+                    "prompt": row["prompt"],
+                    "expected_tools": expected,
+                    "actual_tools": actual_tools,
+                    "match": match,
+                    "final_response": result.final_response,
+                    "latency_ms": result.trace.total_latency_ms,
+                    "trace_id": result.trace.trace_id,
+                    "errors": [record.error for record in result.tool_records if record.error],
+                }
+            )
+            latencies_so_far = [item["latency_ms"] for item in results if item["latency_ms"] is not None]
+            avg_latency = statistics.fmean(latencies_so_far) if latencies_so_far else 0.0
+            progress.set_postfix(
+                current=row["id"],
+                matched=sum(1 for item in results if item["match"]),
+                failed=sum(1 for item in results if not item["match"]),
+                avg=f"{avg_latency:.0f}ms",
+            )
+            progress.update(1)
     latencies = [row["latency_ms"] for row in results if row["latency_ms"] is not None]
     metrics = {
         "run_id": run_id,

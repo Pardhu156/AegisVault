@@ -34,18 +34,20 @@ class AgentRuntime:
         tools: ToolRegistry,
         trace_logger: JsonlTraceLogger | None = None,
         max_tool_rounds: int = 4,
+        system_prompt: str = SYSTEM_PROMPT,
     ) -> None:
         self.client = client
         self.tools = tools
         self.trace_logger = trace_logger
         self.max_tool_rounds = max_tool_rounds
+        self.system_prompt = system_prompt
 
     def run(self, prompt: str) -> AgentRunResult:
         started = time.perf_counter()
         trace = AgentTrace.start(model=self.client.model, user_prompt=prompt)
         trace.add_event("user_prompt", payload={"prompt": prompt})
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": prompt},
         ]
         tool_records: list[ToolExecutionRecord] = []
