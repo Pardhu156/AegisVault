@@ -26,6 +26,7 @@ class GateType(str, Enum):
 class TerminatedBy(str, Enum):
     """Component that produced the final response."""
 
+    LAYER0 = "LAYER0"
     REQUEST_GATE = "REQUEST_GATE"
     RESPONSE_GATE = "RESPONSE_GATE"
     APPLICATION = "APPLICATION"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -107,6 +108,117 @@ class MessagesConfig(BaseModel):
     response_replaced: str = "I cannot provide that response because it falls outside this application's purpose."
 
 
+class Layer0FailMode(str, Enum):
+    """Layer 0 unexpected-error behavior."""
+
+    CLOSED = "closed"
+    OPEN = "open"
+
+
+class Layer0RuleAction(str, Enum):
+    """Actions supported by deterministic Layer 0 rules."""
+
+    ALLOW = "allow"
+    WARN = "warn"
+    BLOCK = "block"
+
+
+class Layer0ForbiddenPatternsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    literals: list[str] = Field(default_factory=list)
+    regex: list[str] = Field(default_factory=list)
+
+    @field_validator("regex")
+    @classmethod
+    def validate_regex(cls, value: list[str]) -> list[str]:
+        for pattern in value:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid layer0 forbidden regex {pattern!r}: {exc}") from exc
+        return value
+
+
+class Layer0RequestConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    require_session_id: bool = False
+    require_domain: bool = False
+    allowed_domains: list[str] = Field(default_factory=list)
+    max_characters: int = Field(default=20000, gt=0)
+    max_bytes: int = Field(default=50000, gt=0)
+    reserved_metadata_keys: list[str] = Field(
+        default_factory=lambda: [
+            "trusted_goal",
+            "goal_embedding",
+            "policy_internal",
+            "middleware_decision",
+            "sentinel_state",
+            "ema_drift",
+            "authorization_result",
+        ]
+    )
+    forbidden_patterns: Layer0ForbiddenPatternsConfig = Field(default_factory=Layer0ForbiddenPatternsConfig)
+
+
+class Layer0DestinationRuleConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fields: list[str] = Field(default_factory=list)
+    allowed_values: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_destination_rule(self) -> "Layer0DestinationRuleConfig":
+        if not self.fields:
+            raise ValueError("layer0.tools.destination_rules fields must not be empty")
+        if not self.allowed_values:
+            raise ValueError("layer0.tools.destination_rules allowed_values must not be empty")
+        return self
+
+
+class Layer0ToolsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowlist_mode: bool = False
+    allowed: list[str] = Field(default_factory=list)
+    denied: list[str] = Field(default_factory=list)
+    max_argument_bytes: int = Field(default=50000, gt=0)
+    reserved_argument_keys: list[str] = Field(
+        default_factory=lambda: [
+            "trusted_goal",
+            "goal_embedding",
+            "sentinel_state",
+            "authorization",
+            "policy_override",
+            "middleware_context",
+        ]
+    )
+    sensitive_argument_keys: list[str] = Field(
+        default_factory=lambda: [
+            "password",
+            "passwd",
+            "secret",
+            "api_key",
+            "access_token",
+            "refresh_token",
+            "private_key",
+        ]
+    )
+    sensitive_argument_action: Layer0RuleAction = Layer0RuleAction.WARN
+    destination_rules: dict[str, Layer0DestinationRuleConfig] = Field(default_factory=dict)
+
+
+class Layer0Config(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    fail_mode: Layer0FailMode = Layer0FailMode.CLOSED
+    stop_on_first_block: bool = False
+    request: Layer0RequestConfig = Field(default_factory=Layer0RequestConfig)
+    tools: Layer0ToolsConfig = Field(default_factory=Layer0ToolsConfig)
+
+
 class DomainPolicy(BaseModel):
     """Complete domain policy loaded from YAML."""
 
@@ -123,6 +235,7 @@ class DomainPolicy(BaseModel):
     audit: AuditConfig = Field(default_factory=AuditConfig)
     checks: DeterministicChecksConfig = Field(default_factory=DeterministicChecksConfig)
     messages: MessagesConfig = Field(default_factory=MessagesConfig)
+    layer0: Layer0Config = Field(default_factory=Layer0Config)
 
     @field_validator("version")
     @classmethod

@@ -12,6 +12,10 @@ Stage 3.3 adds synthetic Goal Vault + Action Gate evaluation before real-agent i
 
 Stage 4.0 adds an independent local Qwen/Ollama tool-calling runtime validation layer. See [docs/agent_runtime.md](docs/agent_runtime.md).
 
+Stage 5.1 adds deterministic Layer 0 request and tool-call validation before expensive semantic checks. See [docs/layer0.md](docs/layer0.md).
+
+Stage 5.2 adds the standalone Sentinel runtime monitor for goal-drift signals. See [docs/sentinel.md](docs/sentinel.md).
+
 ## Stage 1 Scope
 
 Included:
@@ -53,6 +57,22 @@ Stage 4.0 runtime validation addition:
 - Generic tool registry
 - Local mock tools
 - Structured traces and validation reports
+
+Stage 5.1 deterministic security addition:
+
+- Disabled-by-default Layer 0 policy section
+- Fast request and tool-call structural validation
+- Reserved metadata and argument protection
+- Configured literal/regex pattern checks
+- Tool allowlist, denylist, schema, size, secret-key, and destination checks
+
+Stage 5.2 Sentinel runtime signal addition:
+
+- Reasoning, intent, and action drift monitors
+- Weighted risk fusion with unavailable-monitor renormalization
+- Per-session EMA drift tracking
+- Standalone decisions: allow, observe, review, block
+- No runtime orchestration integration in this stage
 
 Deferred to later stages:
 

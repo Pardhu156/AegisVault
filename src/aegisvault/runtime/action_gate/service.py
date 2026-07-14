@@ -11,6 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from aegisvault.audit import AuditSink, NullAuditSink
+from aegisvault.layer0 import Layer0Validator
 from aegisvault.policy.models import DomainPolicy
 from aegisvault.runtime.action_gate.cosine import cosine_similarity
 from aegisvault.runtime.action_gate.evaluators import ActionEvaluator, OllamaActionEvaluator
@@ -195,6 +196,8 @@ class ActionGate:
         policy: DomainPolicy,
         tool_name: str | None = None,
         tool_description: str | None = None,
+        layer0_validator: Layer0Validator | None = None,
+        tool_catalog: dict[str, Any] | None = None,
     ) -> Callable[..., ToolExecutionResult]:
         """Wrap a synchronous Python callable so Action Gate runs before execution."""
 
@@ -213,6 +216,37 @@ class ActionGate:
                 tool_description=resolved_description,
                 tool_arguments={"args": list(args), "kwargs": kwargs},
             )
+            if layer0_validator is not None and layer0_validator.enabled:
+                layer0_decision = layer0_validator.validate_tool_call(
+                    session_id=session_id,
+                    tool_name=resolved_name,
+                    arguments=action.tool_arguments,
+                    domain=policy.application.name,
+                    metadata=thaw_mapping(runtime_context.session_metadata) if runtime_context else {},
+                    tool_catalog=tool_catalog,
+                )
+                if not layer0_decision.allowed:
+                    decision = ActionGateDecision(
+                        tool_name=action.tool_name,
+                        tool_arguments=action.tool_arguments,
+                        goal_similarity=None,
+                        decision_source=ActionDecisionSource.FALLBACK,
+                        verdict=ActionVerdict.BLOCK,
+                        confidence=None,
+                        reason=f"Layer 0 blocked tool call: {layer0_decision.reason}",
+                        latency_ms=0.0,
+                        ollama_called=False,
+                        goal_session=session_id,
+                        metadata={
+                            "layer0_tool_decision": {
+                                "decision": layer0_decision.decision.value,
+                                "rule_id": layer0_decision.rule_id,
+                                "matched_rule_ids": [rule.rule_id for rule in layer0_decision.matched_rules],
+                            }
+                        },
+                    )
+                    self._audit(decision)
+                    return ToolExecutionResult(decision=decision, executed=False)
             decision = self.evaluate_action(
                 session_id=session_id,
                 action=action,
