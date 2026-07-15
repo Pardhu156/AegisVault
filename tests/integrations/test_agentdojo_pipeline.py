@@ -59,6 +59,20 @@ class MidSimilarityEmbedder(GoalEmbedder):
         return (0.5, 0.8660254038)
 
 
+class LowSimilarityEmbedder(GoalEmbedder):
+    model_name = "low-similarity-test"
+    dimension = 2
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def embed(self, text: str) -> tuple[float, ...]:
+        self.calls += 1
+        if self.calls == 1:
+            return (1.0, 0.0)
+        return (0.0, 1.0)
+
+
 class CountingSentinel(SentinelMonitor):
     def __init__(self, level: SentinelDecisionLevel = SentinelDecisionLevel.ALLOW) -> None:
         self.calls = 0
@@ -310,4 +324,31 @@ def test_low_risk_read_action_can_use_mid_similarity_fast_path() -> None:
     assert evaluator.calls == 0
     assert decision.verdict == ActionVerdict.EXECUTE
     assert decision.decision_source == ActionDecisionSource.COSINE
+    assert decision.metadata["threshold_type"] == "low_risk_read_fast_path"
+
+
+def test_low_risk_read_action_can_use_fast_path_even_with_low_similarity() -> None:
+    embedder = LowSimilarityEmbedder()
+    vault = GoalVault(backend=InMemoryGoalVaultBackend(), embedder=embedder)
+    vault.commit_goal(session_id="s1", application_name="test", goal="Read the linked page")
+    evaluator = RecordingEvaluator()
+    gate = ActionGate(
+        goal_vault=vault,
+        embedder=embedder,
+        evaluator=evaluator,
+        config=ActionGateConfig(
+            high_similarity=0.95,
+            low_similarity=0.2,
+            force_verifier_for_risky_actions=True,
+            allow_low_risk_read_fast_path=True,
+        ),
+    )
+    decision = gate.evaluate_action(
+        session_id="s1",
+        action=ProposedToolAction("get_webpage", "Read webpage", {"url": "https://example.com"}),
+        tool_metadata=ToolMetadata(risk_level="low", side_effect_level=SideEffectLevel.READ),
+        policy=policy(),
+    )
+    assert evaluator.calls == 0
+    assert decision.verdict == ActionVerdict.EXECUTE
     assert decision.metadata["threshold_type"] == "low_risk_read_fast_path"

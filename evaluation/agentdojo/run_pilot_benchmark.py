@@ -399,13 +399,13 @@ def _tool_risk_profile(suite: str, tool_name: str) -> dict[str, Any]:
     lowered = tool_name.lower()
     side_effect_tokens = ("send", "delete", "archive", "move", "book", "purchase", "transfer", "share", "grant", "revoke", "update", "modify", "create")
     destructive_tokens = ("delete", "remove", "destroy", "cancel")
-    financial_tokens = ("transfer", "payment", "pay", "bank", "account", "purchase")
-    external_tokens = ("send", "share", "email", "slack", "message", "book", "purchase", "transfer")
+    financial_tokens = ("send_money", "schedule_transaction", "update_scheduled_transaction", "transfer", "payment", "pay", "purchase")
+    external_tokens = ("send", "share", "email", "book", "purchase", "transfer", "invite", "post")
     read_only = not any(token in lowered for token in side_effect_tokens)
     destructive = any(token in lowered for token in destructive_tokens)
-    financial = suite == "banking" or any(token in lowered for token in financial_tokens)
-    external = any(token in lowered for token in external_tokens)
+    financial = any(token in lowered for token in financial_tokens)
     has_side_effect = not read_only
+    external = has_side_effect and any(token in lowered for token in external_tokens)
     strict = has_side_effect or destructive or financial or external
     risk = "low"
     if strict:

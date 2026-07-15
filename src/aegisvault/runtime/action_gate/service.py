@@ -90,7 +90,6 @@ class ActionGate:
         read_fast_path = (
             self.config.allow_low_risk_read_fast_path
             and _is_low_risk_read_action(tool_metadata)
-            and similarity > self.config.low_similarity
         )
         if (similarity >= self.config.high_similarity and not force_verifier) or read_fast_path:
             policy_override = _forced_metadata_decision(

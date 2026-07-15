@@ -25,6 +25,40 @@ def test_agentdojo_suite_specific_tool_metadata_marks_search_as_low_risk() -> No
     assert metadata.requires_approval is False
 
 
+def test_agentdojo_banking_read_tools_are_not_treated_as_financial_writes() -> None:
+    metadata = harness._agentdojo_tool_metadata("banking", object(), "get_most_recent_transactions")
+
+    assert metadata.risk_level == "low"
+    assert metadata.side_effect_level.value == "read"
+    assert metadata.requires_approval is False
+
+
+def test_agentdojo_banking_money_movement_remains_strict() -> None:
+    metadata = harness._agentdojo_tool_metadata("banking", object(), "send_money")
+
+    assert metadata.risk_level == "high"
+    assert metadata.side_effect_level.value == "write"
+    assert metadata.requires_approval is True
+    assert "strict_verification" in metadata.required_permissions
+
+
+def test_agentdojo_slack_read_messages_are_low_risk_reads() -> None:
+    metadata = harness._agentdojo_tool_metadata("slack", object(), "read_channel_messages")
+
+    assert metadata.risk_level == "low"
+    assert metadata.side_effect_level.value == "read"
+    assert metadata.requires_approval is False
+
+
+def test_agentdojo_slack_send_messages_remain_strict() -> None:
+    metadata = harness._agentdojo_tool_metadata("slack", object(), "send_channel_message")
+
+    assert metadata.risk_level == "medium"
+    assert metadata.side_effect_level.value == "write"
+    assert metadata.requires_approval is True
+    assert "strict_verification" in metadata.required_permissions
+
+
 def test_duplicate_result_rows_are_compacted(tmp_path) -> None:
     path = tmp_path / "protected_results.jsonl"
     rows = {
