@@ -43,6 +43,7 @@ from aegisvault.integrations.agentdojo.pipeline import AegisVaultAgentDojoToolsE
 from aegisvault.policy import load_policy
 from aegisvault.policy.models import Layer0Config, Layer0RequestConfig, Layer0ToolsConfig
 from aegisvault.runtime.action_gate import ActionGateConfig, SideEffectLevel, ToolMetadata
+from aegisvault.runtime.action_gate.evaluators import OllamaActionEvaluator
 from aegisvault.runtime.goal_vault import GoalEmbeddingError, GoalVault, InMemoryGoalVaultBackend, SentenceTransformerGoalEmbedder
 from aegisvault.sentinel import SentinelConfig, SentinelDecision, SentinelDecisionLevel, SentinelExecutionState, SentinelMonitor
 
@@ -84,8 +85,20 @@ def main(argv: list[str] | None = None) -> int:
     embedder_info = _verify_production_embedder()
     run_dir = _resolve_run_dir(args)
     run_dir.mkdir(parents=True, exist_ok=True)
-    cases = select_cases(limit=args.limit, suites=tuple(args.suites), attack=args.attack, smoke_balanced=args.smoke_balanced)
+    cases = select_cases(
+        limit=args.limit,
+        suites=tuple(args.suites),
+        attack=args.attack,
+        smoke_balanced=args.smoke_balanced,
+        clean_limit=args.clean_limit,
+        attack_limit=args.attack_limit,
+        balanced_by_suite=args.balanced_by_suite,
+        case_layout=args.case_layout,
+        seed=args.seed,
+        benchmark_version=args.benchmark_version,
+    )
     execution_order = _execution_order(args.phase, args.order)
+    _write_json(run_dir / "selected_cases.json", {"cases": [_case_record(case) for case in cases]})
     _write_json(
         run_dir / "run_metadata.json",
         {
@@ -97,10 +110,21 @@ def main(argv: list[str] | None = None) -> int:
             "attack": args.attack,
             "suites": list(args.suites),
             "case_count": len(cases),
+            "clean_case_count": sum(1 for case in cases if case.case_type == "benign"),
+            "attack_case_count": sum(1 for case in cases if case.case_type == "attack"),
+            "case_selection": {
+                "limit": args.limit,
+                "clean_limit": args.clean_limit,
+                "attack_limit": args.attack_limit,
+                "balanced_by_suite": args.balanced_by_suite,
+                "case_layout": args.case_layout,
+                "seed": args.seed,
+            },
             "execution_order": execution_order,
             "phase": args.phase,
             "order": args.order,
             "agent_date_hint": args.agent_date_hint,
+            "action_timeout_seconds": args.action_timeout_seconds,
             "embedder": embedder_info,
             "similarity_metric": "cosine",
             "normalization": "GoalVault l2_normalize after raw all-MiniLM embedding",
@@ -131,10 +155,34 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def select_cases(*, limit: int | None, suites: tuple[str, ...], attack: str, smoke_balanced: bool = False) -> list[PilotCase]:
+def select_cases(
+    *,
+    limit: int | None,
+    suites: tuple[str, ...],
+    attack: str,
+    smoke_balanced: bool = False,
+    clean_limit: int | None = None,
+    attack_limit: int | None = None,
+    balanced_by_suite: bool = False,
+    case_layout: str = "clean-first",
+    seed: int = 7,
+    benchmark_version: str = "v1.2.2",
+) -> list[PilotCase]:
+    if clean_limit is not None or attack_limit is not None:
+        return _select_scaled_cases(
+            clean_limit=clean_limit or 0,
+            attack_limit=attack_limit or 0,
+            suites=suites,
+            attack=attack,
+            balanced_by_suite=balanced_by_suite,
+            case_layout=case_layout,
+            seed=seed,
+            benchmark_version=benchmark_version,
+            limit=limit,
+        )
     cases: list[PilotCase] = []
     for suite_name in suites:
-        suite = get_suite("v1.2.2", suite_name)
+        suite = get_suite(benchmark_version, suite_name)
         user_ids = list(suite.user_tasks)[:3]
         injection_ids = list(suite.injection_tasks)[:2]
         if user_ids:
@@ -149,6 +197,90 @@ def select_cases(*, limit: int | None, suites: tuple[str, ...], attack: str, smo
         if len(injection_ids) > 1 and user_ids:
             cases.append(PilotCase(f"{suite_name}_{attack}_{user_ids[0]}_{injection_ids[1]}", suite_name, user_ids[0], injection_ids[1], attack))
     return cases[:limit] if limit else cases
+
+
+def _select_scaled_cases(
+    *,
+    clean_limit: int,
+    attack_limit: int,
+    suites: tuple[str, ...],
+    attack: str,
+    balanced_by_suite: bool,
+    case_layout: str,
+    seed: int,
+    benchmark_version: str,
+    limit: int | None,
+) -> list[PilotCase]:
+    rng = random.Random(seed)
+    clean_pools: dict[str, list[PilotCase]] = {}
+    attack_pools: dict[str, list[PilotCase]] = {}
+    for suite_name in suites:
+        suite = get_suite(benchmark_version, suite_name)
+        clean_pools[suite_name] = [
+            PilotCase(f"{suite_name}_benign_{user_id}", suite_name, user_id, None, None)
+            for user_id in suite.user_tasks
+        ]
+        attack_pools[suite_name] = [
+            PilotCase(f"{suite_name}_{attack}_{user_id}_{injection_id}", suite_name, user_id, injection_id, attack)
+            for user_id in suite.user_tasks
+            for injection_id in suite.injection_tasks
+        ]
+    if balanced_by_suite:
+        clean_cases = _round_robin_sample(clean_pools, clean_limit, rng)
+        attack_cases = _round_robin_sample(attack_pools, attack_limit, rng)
+    else:
+        clean_cases = _flat_sample(clean_pools, clean_limit, rng)
+        attack_cases = _flat_sample(attack_pools, attack_limit, rng)
+    cases = _interleave_cases(clean_cases, attack_cases) if case_layout == "interleave-types" else [*clean_cases, *attack_cases]
+    return cases[:limit] if limit else cases
+
+
+def _interleave_cases(clean_cases: list[PilotCase], attack_cases: list[PilotCase]) -> list[PilotCase]:
+    """Interleave clean and attacked cases so live progress reflects both utility and security."""
+
+    cases: list[PilotCase] = []
+    max_len = max(len(clean_cases), len(attack_cases))
+    for index in range(max_len):
+        if index < len(clean_cases):
+            cases.append(clean_cases[index])
+        if index < len(attack_cases):
+            cases.append(attack_cases[index])
+    return cases
+
+
+def _round_robin_sample(pools: dict[str, list[PilotCase]], limit: int, rng: random.Random) -> list[PilotCase]:
+    shuffled = {suite: _shuffled(cases, rng) for suite, cases in pools.items()}
+    selected: list[PilotCase] = []
+    suite_names = list(shuffled)
+    while len(selected) < limit and any(shuffled.values()):
+        for suite_name in suite_names:
+            if len(selected) >= limit:
+                break
+            if shuffled[suite_name]:
+                selected.append(shuffled[suite_name].pop())
+    return selected
+
+
+def _flat_sample(pools: dict[str, list[PilotCase]], limit: int, rng: random.Random) -> list[PilotCase]:
+    cases = [case for pool in pools.values() for case in pool]
+    return _shuffled(cases, rng)[:limit]
+
+
+def _shuffled(cases: list[PilotCase], rng: random.Random) -> list[PilotCase]:
+    output = list(cases)
+    rng.shuffle(output)
+    return output
+
+
+def _case_record(case: PilotCase) -> dict[str, Any]:
+    return {
+        "case_id": case.case_id,
+        "suite": case.suite,
+        "case_type": case.case_type,
+        "user_task_id": case.user_task_id,
+        "injection_task_id": case.injection_task_id,
+        "attack": case.attack,
+    }
 
 
 def _run_phase(phase: Literal["baseline", "protected"], cases: list[PilotCase], args: argparse.Namespace, run_dir: Path) -> list[dict[str, Any]]:
@@ -222,6 +354,9 @@ def _run_case(phase: Literal["baseline", "protected"], case: PilotCase, args: ar
         "injection_task_id": case.injection_task_id,
         "attack": case.attack,
         "case_type": case.case_type,
+        "user_prompt": _safe_attr(user_task, "PROMPT"),
+        "ground_truth_output": _safe_attr(user_task, "GROUND_TRUTH_OUTPUT"),
+        "injection_goal": _safe_attr(injection_task, "GOAL") if injection_task else None,
         "expected_outcome": "utility_true_injection_success_false",
         "utility": bool(utility),
         "injection_success": bool(injection_success) if case.case_type == "attack" else False,
@@ -255,6 +390,7 @@ def _pipeline_for_phase(phase: Literal["baseline", "protected"], suite: Any, arg
         goal_vault=goal_vault,
         embedder=embedder,
         sentinel_monitor=sentinel,
+        action_evaluator=_action_evaluator_for_policy(policy, args),
         action_config=_agentdojo_action_config(),
         tool_metadata_resolver=lambda function, tool_name: _agentdojo_tool_metadata(case.suite, function, tool_name),
         decision_sink=action_traces.append,
@@ -345,6 +481,17 @@ def _agentdojo_action_config() -> ActionGateConfig:
         low_similarity=0.2,
         force_verifier_for_risky_actions=True,
         allow_low_risk_read_fast_path=True,
+    )
+
+
+def _action_evaluator_for_policy(policy: Any, args: argparse.Namespace) -> OllamaActionEvaluator:
+    """Build the AgentDojo Action Gate verifier without mutating shared policy files."""
+
+    return OllamaActionEvaluator(
+        model=policy.evaluator.model,
+        base_url=policy.evaluator.base_url,
+        timeout_seconds=args.action_timeout_seconds,
+        temperature=policy.evaluator.temperature,
     )
 
 
@@ -636,6 +783,9 @@ def _append_action_rows(path: Path, row: dict[str, Any]) -> None:
     if not traces:
         return
     for index, trace in enumerate(traces, start=1):
+        risk = trace.get("risk_classification") or {}
+        action_gate = trace.get("action_gate") or {}
+        sentinel = trace.get("sentinel") or {}
         _append_jsonl(
             path,
             {
@@ -648,6 +798,14 @@ def _append_action_rows(path: Path, row: dict[str, Any]) -> None:
                 "action_index": index,
                 "benchmark_utility": row["utility"],
                 "benchmark_injection_success": row.get("injection_success", row.get("security", False)),
+                "risk_level": risk.get("risk_level"),
+                "side_effect_level": risk.get("side_effect_level"),
+                "requires_approval": risk.get("requires_approval"),
+                "sentinel_verdict": sentinel.get("decision"),
+                "action_gate_verdict": action_gate.get("verdict"),
+                "decision_source": action_gate.get("decision_source"),
+                "ollama_called": action_gate.get("ollama_called"),
+                "goal_similarity": action_gate.get("goal_similarity"),
                 **trace,
             },
         )
@@ -677,6 +835,15 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--suites", nargs="+", default=list(DEFAULT_SUITES))
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--smoke-balanced", action="store_true", help="Run one benign and one attacked case per selected suite.")
+    parser.add_argument("--clean-limit", type=int, default=None, help="Select this many clean AgentDojo user tasks.")
+    parser.add_argument("--attack-limit", type=int, default=None, help="Select this many attacked user-task/injection combinations.")
+    parser.add_argument("--balanced-by-suite", action="store_true", help="Balance selected clean/attack cases across suites.")
+    parser.add_argument(
+        "--case-layout",
+        choices=["clean-first", "interleave-types"],
+        default="clean-first",
+        help="Order selected clean/attack cases. interleave-types makes live progress easier to interpret.",
+    )
     parser.add_argument("--model", default="local")
     parser.add_argument("--model-id", default=os.getenv("AGENTDOJO_MODEL_ID", "qwen3:4b-instruct"))
     parser.add_argument("--benchmark-version", default="v1.2.2")
@@ -687,6 +854,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--resume", action="store_true", default=True)
     parser.add_argument("--skip-preflight", action="store_true")
+    parser.add_argument(
+        "--action-timeout-seconds",
+        type=float,
+        default=120.0,
+        help="AgentDojo-only Ollama Action Gate verifier timeout for risky tool actions.",
+    )
     parser.add_argument(
         "--no-agent-date-hint",
         dest="agent_date_hint",
@@ -707,6 +880,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Phase order when --phase both is used. protected-first is for debugging, not official benchmark reporting.",
     )
     return parser.parse_args(argv)
+
+
+def _safe_attr(obj: Any, name: str) -> Any:
+    if obj is None:
+        return None
+    value = getattr(obj, name, None)
+    return None if callable(value) else value
 
 
 def _execution_order(phase: str, order: str) -> list[Literal["baseline", "protected"]]:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 
 import pytest
 
@@ -83,6 +84,62 @@ def test_duplicate_result_rows_are_compacted(tmp_path) -> None:
     assert compacted == [{"case_id": "case-a", "value": 2}, {"case_id": "case-b", "value": 3}]
 
 
+def test_scaled_sampler_selects_clean_and_attack_cases_without_duplicates() -> None:
+    cases = harness.select_cases(
+        limit=None,
+        suites=("workspace", "slack", "banking", "travel"),
+        attack="direct",
+        clean_limit=20,
+        attack_limit=100,
+        balanced_by_suite=True,
+        seed=7,
+        benchmark_version="v1.2.2",
+    )
+
+    assert len(cases) == 120
+    assert sum(1 for case in cases if case.case_type == "benign") == 20
+    assert sum(1 for case in cases if case.case_type == "attack") == 100
+    assert len({case.case_id for case in cases}) == 120
+    clean_by_suite = Counter(case.suite for case in cases if case.case_type == "benign")
+    attack_by_suite = Counter(case.suite for case in cases if case.case_type == "attack")
+    assert clean_by_suite == {"workspace": 5, "slack": 5, "banking": 5, "travel": 5}
+    assert attack_by_suite == {"workspace": 25, "slack": 25, "banking": 25, "travel": 25}
+
+
+def test_scaled_sampler_can_interleave_clean_and_attack_cases() -> None:
+    cases = harness.select_cases(
+        limit=None,
+        suites=("workspace", "slack", "banking", "travel"),
+        attack="direct",
+        clean_limit=4,
+        attack_limit=4,
+        balanced_by_suite=True,
+        case_layout="interleave-types",
+        seed=7,
+        benchmark_version="v1.2.2",
+    )
+
+    assert len(cases) == 8
+    assert [case.case_type for case in cases[:4]] == ["benign", "attack", "benign", "attack"]
+
+
+def test_case_record_marks_legit_cases_with_null_injection() -> None:
+    case = harness.select_cases(
+        limit=1,
+        suites=("workspace",),
+        attack="direct",
+        clean_limit=1,
+        attack_limit=0,
+        balanced_by_suite=True,
+        seed=7,
+        benchmark_version="v1.2.2",
+    )[0]
+
+    record = harness._case_record(case)
+    assert record["case_type"] == "benign"
+    assert record["injection_task_id"] is None
+
+
 def test_missing_real_embedder_fails_clearly(monkeypatch: pytest.MonkeyPatch) -> None:
     class BrokenEmbedder:
         model_name = "all-MiniLM-L6-v2"
@@ -95,3 +152,47 @@ def test_missing_real_embedder_fails_clearly(monkeypatch: pytest.MonkeyPatch) ->
 
     with pytest.raises(SystemExit, match="Production embedder unavailable"):
         harness._verify_production_embedder()
+
+
+def test_action_rows_include_flattened_decision_fields(tmp_path) -> None:
+    path = tmp_path / "actions.jsonl"
+    row = {
+        "phase": "protected",
+        "case_id": "case-a",
+        "suite": "workspace",
+        "case_type": "benign",
+        "user_task_id": "user_task_1",
+        "injection_task_id": None,
+        "utility": True,
+        "injection_success": False,
+        "middleware": {
+            "action_traces": [
+                {
+                    "tool_name": "search_files",
+                    "risk_classification": {
+                        "risk_level": "low",
+                        "side_effect_level": "read",
+                        "requires_approval": False,
+                    },
+                    "sentinel": {"decision": "allow"},
+                    "action_gate": {
+                        "verdict": "EXECUTE",
+                        "decision_source": "COSINE",
+                        "ollama_called": False,
+                        "goal_similarity": 0.91,
+                    },
+                    "final_result": "EXECUTE",
+                    "executed": True,
+                }
+            ]
+        },
+    }
+
+    harness._append_action_rows(path, row)
+
+    written = json.loads(path.read_text(encoding="utf-8").strip())
+    assert written["risk_level"] == "low"
+    assert written["side_effect_level"] == "read"
+    assert written["sentinel_verdict"] == "allow"
+    assert written["action_gate_verdict"] == "EXECUTE"
+    assert written["ollama_called"] is False
