@@ -6,6 +6,8 @@ does not require AgentDojo unless this integration is used.
 
 from __future__ import annotations
 
+import json
+import re
 from ast import literal_eval
 from typing import Any, Callable
 
@@ -145,6 +147,7 @@ class AegisVaultAgentDojoToolsExecutor(BasePipelineElement):
         )
         self._initialized_sessions: set[str] = set()
         self._previous_actions: dict[str, str] = {}
+        self._executed_side_effects: dict[str, set[str]] = {}
 
     def query(
         self,
@@ -211,7 +214,13 @@ class AegisVaultAgentDojoToolsExecutor(BasePipelineElement):
             )
             return "", decision.reason
 
-        args = _coerce_args(dict(tool_call.args))
+        args = _adapt_agentdojo_tool_args(
+            suite_name=self.config.suite_name,
+            query=query,
+            env=env,
+            tool_name=tool_call.function,
+            args=_coerce_args(dict(tool_call.args)),
+        )
         layer0_decision = self.layer0.validate_tool_call(
             session_id=session_id,
             tool_name=tool_call.function,
@@ -294,8 +303,29 @@ class AegisVaultAgentDojoToolsExecutor(BasePipelineElement):
                 executed=False,
             )
             return "", decision.reason
+        duplicate_message = self._duplicate_side_effect_message(
+            session_id=session_id,
+            tool_name=tool_call.function,
+            args=args,
+            tool_metadata=tool_metadata,
+        )
+        if duplicate_message is not None:
+            self._record_trace(
+                session_id=session_id,
+                query=query,
+                tool_call=tool_call,
+                args=args,
+                tool_metadata=tool_metadata,
+                sentinel_decision=sentinel_decision,
+                action_decision=decision,
+                final_result="SKIP_DUPLICATE",
+                reason=duplicate_message,
+                executed=False,
+            )
+            return {"message": duplicate_message}, None
         result = runtime.run_function(env, tool_call.function, args)
         self._previous_actions[session_id] = tool_call.function
+        self._remember_side_effect(session_id=session_id, tool_name=tool_call.function, args=args, tool_metadata=tool_metadata)
         self._record_trace(
             session_id=session_id,
             query=query,
@@ -309,6 +339,33 @@ class AegisVaultAgentDojoToolsExecutor(BasePipelineElement):
             executed=True,
         )
         return result
+
+    def _duplicate_side_effect_message(
+        self,
+        *,
+        session_id: str,
+        tool_name: str,
+        args: dict[str, Any],
+        tool_metadata: ToolMetadata,
+    ) -> str | None:
+        if tool_metadata.side_effect_level == SideEffectLevel.READ:
+            return None
+        signature = _tool_signature(tool_name, args)
+        if signature not in self._executed_side_effects.get(session_id, set()):
+            return None
+        return "Duplicate side-effect tool call skipped because the identical action already succeeded."
+
+    def _remember_side_effect(
+        self,
+        *,
+        session_id: str,
+        tool_name: str,
+        args: dict[str, Any],
+        tool_metadata: ToolMetadata,
+    ) -> None:
+        if tool_metadata.side_effect_level == SideEffectLevel.READ:
+            return
+        self._executed_side_effects.setdefault(session_id, set()).add(_tool_signature(tool_name, args))
 
     def _ensure_goal(self, *, session_id: str, objective: str) -> None:
         if session_id in self._initialized_sessions:
@@ -404,6 +461,52 @@ def _coerce_args(args: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, str) and _is_string_list(value):
             output[key] = literal_eval(value)
     return output
+
+
+def _adapt_agentdojo_tool_args(
+    *,
+    suite_name: str,
+    query: str,
+    env: Any,
+    tool_name: str,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    if suite_name not in {"workspace", "travel"}:
+        return args
+    if tool_name not in {"search_calendar_events", "get_day_calendar_events"}:
+        return args
+    if _query_contains_explicit_year(query):
+        return args
+    current_year = _current_environment_year(env)
+    if current_year is None:
+        return args
+    output = dict(args)
+    for key in ("date", "day"):
+        value = output.get(key)
+        if isinstance(value, str):
+            output[key] = _normalize_yearless_date(value, current_year)
+    return output
+
+
+def _query_contains_explicit_year(query: str) -> bool:
+    return bool(re.search(r"\b(?:19|20)\d{2}\b", query))
+
+
+def _current_environment_year(env: Any) -> int | None:
+    current_day = getattr(getattr(env, "calendar", None), "current_day", None)
+    return getattr(current_day, "year", None)
+
+
+def _normalize_yearless_date(value: str, current_year: int) -> str:
+    match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", value.strip())
+    if not match:
+        return value
+    _, month, day = match.groups()
+    return f"{current_year:04d}-{month}-{day}"
+
+
+def _tool_signature(tool_name: str, args: dict[str, Any]) -> str:
+    return json.dumps({"tool": tool_name, "args": args}, sort_keys=True, default=str, separators=(",", ":"))
 
 
 def _is_string_list(value: str) -> bool:

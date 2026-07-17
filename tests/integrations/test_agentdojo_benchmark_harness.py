@@ -60,6 +60,22 @@ def test_agentdojo_slack_send_messages_remain_strict() -> None:
     assert "strict_verification" in metadata.required_permissions
 
 
+def test_agentdojo_slack_invites_are_not_read_only_fast_path() -> None:
+    metadata = harness._agentdojo_tool_metadata("slack", object(), "invite_user_to_slack")
+
+    assert metadata.risk_level == "medium"
+    assert metadata.side_effect_level.value == "write"
+    assert metadata.requires_approval is True
+
+
+def test_agentdojo_travel_reservations_require_strict_verification() -> None:
+    metadata = harness._agentdojo_tool_metadata("travel", object(), "reserve_hotel")
+
+    assert metadata.risk_level == "high"
+    assert metadata.side_effect_level.value == "write"
+    assert metadata.requires_approval is True
+
+
 def test_duplicate_result_rows_are_compacted(tmp_path) -> None:
     path = tmp_path / "protected_results.jsonl"
     rows = {
@@ -140,6 +156,27 @@ def test_case_record_marks_legit_cases_with_null_injection() -> None:
     assert record["injection_task_id"] is None
 
 
+def test_first_selection_strategy_uses_agentdojo_order() -> None:
+    cases = harness.select_cases(
+        limit=None,
+        suites=("workspace", "slack"),
+        attack="direct",
+        clean_limit=3,
+        attack_limit=2,
+        selection_strategy="first",
+        seed=7,
+        benchmark_version="v1.2.2",
+    )
+
+    assert [case.case_id for case in cases] == [
+        "workspace_benign_user_task_0",
+        "workspace_benign_user_task_1",
+        "workspace_benign_user_task_3",
+        "workspace_direct_user_task_0_injection_task_0",
+        "workspace_direct_user_task_0_injection_task_1",
+    ]
+
+
 def test_missing_real_embedder_fails_clearly(monkeypatch: pytest.MonkeyPatch) -> None:
     class BrokenEmbedder:
         model_name = "all-MiniLM-L6-v2"
@@ -196,3 +233,38 @@ def test_action_rows_include_flattened_decision_fields(tmp_path) -> None:
     assert written["sentinel_verdict"] == "allow"
     assert written["action_gate_verdict"] == "EXECUTE"
     assert written["ollama_called"] is False
+
+
+def test_metrics_separate_middleware_fp_from_model_utility_failure() -> None:
+    rows = [
+        {
+            "case_id": "clean-model-fail",
+            "suite": "workspace",
+            "case_type": "benign",
+            "utility": False,
+            "middleware": {"action_traces": [{"final_result": "EXECUTE"}]},
+        },
+        {
+            "case_id": "clean-blocked",
+            "suite": "workspace",
+            "case_type": "benign",
+            "utility": False,
+            "middleware": {"action_traces": [{"final_result": "BLOCK"}]},
+        },
+        {
+            "case_id": "attack-safe",
+            "suite": "workspace",
+            "case_type": "attack",
+            "utility": True,
+            "injection_success": False,
+            "middleware": {"action_traces": [{"final_result": "EXECUTE"}]},
+        },
+    ]
+
+    metrics = harness._phase_metrics(rows)
+
+    assert metrics["false_positives"] == 1
+    assert metrics["middleware_false_positives"] == 1
+    assert metrics["model_utility_failures"] == 1
+    assert metrics["failure_breakdown"]["middleware_false_positive_cases"] == ["clean-blocked"]
+    assert metrics["failure_breakdown"]["model_utility_failure_cases"] == ["clean-model-fail"]

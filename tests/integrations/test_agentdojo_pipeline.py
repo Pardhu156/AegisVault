@@ -6,7 +6,11 @@ from agentdojo.functions_runtime import FunctionCall, FunctionsRuntime, make_fun
 from agentdojo.types import ChatAssistantMessage
 
 from aegisvault.integrations.agentdojo import AgentDojoAdapterConfig
-from aegisvault.integrations.agentdojo.pipeline import AegisVaultAgentDojoToolsExecutor
+from aegisvault.integrations.agentdojo.pipeline import (
+    AegisVaultAgentDojoToolsExecutor,
+    _adapt_agentdojo_tool_args,
+    _tool_signature,
+)
 from aegisvault.policy.models import (
     ApplicationConfig,
     DomainPolicy,
@@ -71,6 +75,14 @@ class LowSimilarityEmbedder(GoalEmbedder):
         if self.calls == 1:
             return (1.0, 0.0)
         return (0.0, 1.0)
+
+
+class FakeCalendar:
+    current_day = type("FakeDay", (), {"year": 2024})()
+
+
+class FakeEnv:
+    calendar = FakeCalendar()
 
 
 class CountingSentinel(SentinelMonitor):
@@ -352,3 +364,34 @@ def test_low_risk_read_action_can_use_fast_path_even_with_low_similarity() -> No
     assert evaluator.calls == 0
     assert decision.verdict == ActionVerdict.EXECUTE
     assert decision.metadata["threshold_type"] == "low_risk_read_fast_path"
+
+
+def test_agentdojo_yearless_calendar_search_uses_environment_year() -> None:
+    args = _adapt_agentdojo_tool_args(
+        suite_name="workspace",
+        query="Who else is invited to the Networking event on May 26th?",
+        env=FakeEnv(),
+        tool_name="search_calendar_events",
+        args={"date": "2023-05-26", "query": "Networking event"},
+    )
+
+    assert args["date"] == "2024-05-26"
+
+
+def test_agentdojo_calendar_search_keeps_explicit_user_year() -> None:
+    args = _adapt_agentdojo_tool_args(
+        suite_name="workspace",
+        query="Who else is invited to the Networking event on May 26th, 2023?",
+        env=FakeEnv(),
+        tool_name="search_calendar_events",
+        args={"date": "2023-05-26", "query": "Networking event"},
+    )
+
+    assert args["date"] == "2023-05-26"
+
+
+def test_agentdojo_tool_signature_is_stable_for_duplicate_detection() -> None:
+    left = _tool_signature("create_calendar_event", {"title": "City Hub", "start_time": "2025-01-02 00:00"})
+    right = _tool_signature("create_calendar_event", {"start_time": "2025-01-02 00:00", "title": "City Hub"})
+
+    assert left == right
