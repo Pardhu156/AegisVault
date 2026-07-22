@@ -16,6 +16,8 @@ Stage 5.1 adds deterministic Layer 0 request and tool-call validation before exp
 
 Stage 5.2 adds the Sentinel runtime monitor for goal-drift signals and an optional protected-tool integration hook. See [docs/sentinel.md](docs/sentinel.md).
 
+Stage 6.1 adds AgentDojo integration for routing Workspace, Slack, Banking, and Travel benchmark tasks through AegisVault runtime security. See [evaluation/agentdojo/README.md](evaluation/agentdojo/README.md).
+
 ## Stage 1 Scope
 
 Included:
@@ -73,6 +75,14 @@ Stage 5.2 Sentinel runtime signal addition:
 - Per-session EMA drift tracking
 - Standalone decisions: allow, observe, review, block
 - Optional protected-tool integration before Action Gate when explicitly enabled
+
+Stage 6.1 AgentDojo integration addition:
+
+- AgentDojo adapter for Workspace, Slack, Banking, and Travel suites
+- Layer 0 request sanity validation and tool-call validation
+- Goal Vault initialization with production `all-MiniLM-L6-v2` embeddings
+- Sentinel and Action Gate checks before tool execution
+- Runtime compatibility reporting that separates middleware false positives from model utility failures
 
 Deferred to later stages:
 
@@ -368,6 +378,31 @@ python evaluation/aegisbench/run_aegisbench.py
 ```
 
 AegisBench documentation is in `docs/aegisbench_v1.md`. Benchmark cases live in `datasets/benchmarks/aegisbench_v1/`, and reports are written to `reports/aegisbench_v1/<run_id>/`.
+
+Run the AgentDojo protected benchmark sample:
+
+```bash
+TOKENIZERS_PARALLELISM=false LOCAL_LLM_PORT=11434 .venv/bin/python evaluation/agentdojo/run_pilot_benchmark.py \
+  --clean-limit 97 \
+  --attack-limit 60 \
+  --balanced-by-suite \
+  --selection-strategy first \
+  --case-layout interleave-types \
+  --phase protected \
+  --action-timeout-seconds 120 \
+  --output-dir evaluation/agentdojo/results/agentdojo_stageA_20clean_10attack_fix3
+```
+
+Latest saved AgentDojo protected run:
+
+- Result folder: `evaluation/agentdojo/results/agentdojo_stageA_20clean_10attack_fix3`
+- Coverage: 157 cases total, including all 97 clean AgentDojo user tasks and 60 injected attack cases
+- Attack Success Rate / IMP / Tool ASR: 0.0% on the 60 injected cases
+- Middleware false positives: 5 / 97 clean cases, or 5.15%
+- Model utility failures: 54 / 97 clean cases, or 55.67%
+- Clean utility success: 39.18%
+
+AgentDojo reporting separates AegisVault middleware false positives from local Qwen/model execution failures. A clean task is counted as a middleware false positive only when AegisVault blocks or modifies a legitimate action; wrong dates, wrong arguments, arithmetic mistakes, duplicate tool choices, or AgentDojo exact-match misses are counted as model utility failures.
 
 Run the optional Ollama integration test only when Ollama is running and the configured model is available:
 
